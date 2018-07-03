@@ -1,0 +1,23 @@
+[package]
+name = "ciri"
+version = "0.1.0-dev"
+authors = ["xentec <xentec@aix0.eu>"]
+
+[dependencies]
+#clap = "2"
+
+serenity = "0.5"
+typemap = "0.3"
+reqwest = "0.6"
+
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+
+chrono = "0.4"
+rand = "0.4"
+log = "0.4"
+fern = { version = "0.5", features = ["colored"] }
+
+[patch.crates-io]
+# serenity = { path = '../serenity.rs' }
