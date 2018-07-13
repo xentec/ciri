@@ -21,3 +21,6 @@ fern = { version = "0.5", features = ["colored"] }
 
 [patch.crates-io]
 # serenity = { path = '../serenity.rs' }
+
+[profile.release]
+lto = true
