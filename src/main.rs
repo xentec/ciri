@@ -29,9 +29,11 @@ use std::{env, fs};
 
 mod cache;
 
-struct Handler;
-
 const CACHE_PATH: &'static str = "ciri.json";
+const CACHE_SIZE: usize = 128;
+
+
+struct Handler;
 
 struct ShardManagerContainer;
 impl typemap::Key for ShardManagerContainer {
@@ -93,8 +95,9 @@ fn main()
 	let mut blacklist = fs::OpenOptions::new().read(true)
 		.open(&CACHE_PATH).map_err(|_| ())
 		.and_then(|f| serde_json::from_reader(f).map_err(|_| ()))
-		.unwrap_or(cache::Queue::new(128));
+		.unwrap_or(cache::Queue::new());
 
+	blacklist.reserve(CACHE_SIZE);
 	if blacklist.len() > 0
 	{
 		blacklist.optimize();

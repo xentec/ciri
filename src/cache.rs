@@ -14,12 +14,26 @@ pub struct Queue<Item: Hash + Eq + Copy>
 impl<Item> Queue<Item>
 	where Item: Hash + Eq + Copy
 {
-	pub fn new(capacity: usize) -> Queue<Item> 
+	pub fn new() -> Queue<Item> 
 	{
 		Queue {
-			queue: VecDeque::with_capacity(capacity),
-			lookup: HashSet::with_capacity(capacity),
+			queue: VecDeque::new(),
+			lookup: HashSet::new(),
 		}
+	}
+
+	pub fn with_capacity(capacity: usize) -> Queue<Item> 
+	{
+		let mut q = Self::new();
+		q.reserve(capacity);
+
+		q
+		}
+
+	pub fn reserve(&mut self, capacity: usize)
+	{
+		self.queue.reserve(capacity);
+		self.lookup.reserve(capacity);
 	}
 
 	pub fn len(&self) -> usize
