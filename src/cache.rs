@@ -46,7 +46,7 @@ impl<Item> Queue<Item>
 		let mut dropped = None;
 		if self.queue.len() == self.queue.capacity()
 		{
-			let last = self.queue.pop_back().unwrap();
+			let last = self.queue.pop_front().unwrap();
 			self.lookup.remove(&last);
 			dropped = Some(last);
 		}
