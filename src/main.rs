@@ -54,42 +54,42 @@ impl typemap::Key for Pr0ListKey {
 fn main() 
 {
 	let colors_line = ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        // we actually don't need to specify the color for debug and info, they are white by default
-        .info(Color::White)
-        .debug(Color::White)
-        // depending on the terminals color scheme, this is the same as the background color
-        .trace(Color::BrightBlack);
+		.error(Color::Red)
+		.warn(Color::Yellow)
+		// we actually don't need to specify the color for debug and info, they are white by default
+		.info(Color::White)
+		.debug(Color::White)
+		// depending on the terminals color scheme, this is the same as the background color
+		.trace(Color::BrightBlack);
 
-    // configure colors for the name of the level.
-    // since almost all of them are the some as the color for the whole line, we just clone
-    // `colors_line` and overwrite our changes
-    let colors_level = colors_line.clone()
-        .info(Color::Green);
+	// configure colors for the name of the level.
+	// since almost all of them are the some as the color for the whole line, we just clone
+	// `colors_line` and overwrite our changes
+	let colors_level = colors_line.clone()
+		.info(Color::Green);
 
-    fern::Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{color_line}[{date}][{target}][{level}{color_line}] {message}\x1B[0m",
-                color_line = format_args!("\x1B[{}m", colors_line.get_color(&record.level()).to_fg_str()),
-                date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                target = record.target(),
-                level = colors_level.color(record.level()),
-                message = message,
-            ));
-        })
-        // set the default log level. to filter out verbose log messages from dependencies, set
-        // this to Warn and overwrite the log level for your crate.
-        .level(log::LevelFilter::Info)
-        // change log levels for individual modules. Note: This looks for the record's target
-        // field which defaults to the module path but can be overwritten with the `target`
-        // parameter:
-        // `info!(target="special_target", "This log message is about special_target");`
-        .level_for("ciri", log::LevelFilter::Trace)
-        // output to stdout
-        .chain(std::io::stdout())
-        .apply().unwrap();
+	fern::Dispatch::new()
+		.format(move |out, message, record| {
+			out.finish(format_args!(
+				"{color_line}[{date}][{target}][{level}{color_line}] {message}\x1B[0m",
+				color_line = format_args!("\x1B[{}m", colors_line.get_color(&record.level()).to_fg_str()),
+				date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+				target = record.target(),
+				level = colors_level.color(record.level()),
+				message = message,
+			));
+		})
+		// set the default log level. to filter out verbose log messages from dependencies, set
+		// this to Warn and overwrite the log level for your crate.
+		.level(log::LevelFilter::Info)
+		// change log levels for individual modules. Note: This looks for the record's target
+		// field which defaults to the module path but can be overwritten with the `target`
+		// parameter:
+		// `info!(target="special_target", "This log message is about special_target");`
+		.level_for("ciri", log::LevelFilter::Trace)
+		// output to stdout
+		.chain(std::io::stdout())
+		.apply().unwrap();
 
 
 	let mut blacklist = fs::OpenOptions::new().read(true)
@@ -289,13 +289,13 @@ fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),Comma
 	}
 
 	fn file_is_video(f: &str) -> bool {
-	    f.ends_with(".webm") || f.ends_with(".mp4")
+		f.ends_with(".webm") || f.ends_with(".mp4")
 	}
 
 	let mut reply = msg.channel_id.say(&format!("Searching for {}...", args[0]))?;
 
 	let res = reqwest::get(&format!("https://pr0gramm.com/api/items/get?flags=9&promoted=1&tags={}", args.join("+")))
-	                  .map(|mut r| r.json::<Res>());
+                     .map(|mut r| r.json::<Res>());
 	let mut images = match res {
 		Err(e) => return fail(format!("kadse fetch failed: {}", e)),
 		Ok(v) => match v {
@@ -346,7 +346,7 @@ fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),Comma
 				{
 					format!("https://vid.pr0gramm.com/{}", &c)
 				} else {
-				    format!("https://img.pr0gramm.com/{}", &c)
+					format!("https://img.pr0gramm.com/{}", &c)
 				}
 			};
 

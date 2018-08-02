@@ -64,8 +64,8 @@ impl<Item> Queue<Item>
 
 	pub fn clear(&mut self) 
 	{
-	    self.queue.clear();
-	    self.lookup.clear();
+		self.queue.clear();
+		self.lookup.clear();
 	}
 
 	pub fn optimize(&mut self)
@@ -86,8 +86,8 @@ impl<Item> fmt::Display for Queue<Item>
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
 	{
 		write!(f, "[");
-        write!(f, "{}", self.queue)
+		write!(f, "{}", self.queue)
 
-    } 	
+	} 	
 }
 */
