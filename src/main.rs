@@ -51,7 +51,7 @@ impl typemap::Key for Pr0ListKey {
 }
 
 
-fn main() 
+fn main()
 {
 	let colors_line = ColoredLevelConfig::new()
 		.error(Color::Red)
@@ -218,23 +218,23 @@ fn ping(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError
 			Some(v) => v,
 			None => {
 				error!("lat sh");
-				return fail(&"failed to get shard manager");	
-			} 
+				return fail(&"failed to get shard manager");
+			}
 		};
 
 		let manager = shard_manager.lock();
 		let runners = manager.runners.lock();
 
 		runners.get(&ShardId(ctx.shard_id))
-			.and_then(|runner| runner.latency) 
+			.and_then(|runner| runner.latency)
 			.map(|s| format!("{:.3} ms", int2float_concat(s.as_secs(), s.subsec_nanos() as u64) * 1000f64))
 	};
 
 
-	if latency.is_none() 
-	{ 
+	if latency.is_none()
+	{
 		error!("lat det");
-		return fail("Latency detection failed"); 
+		return fail("Latency detection failed");
 	}
 
 	if let Err(e) = reply.edit(|m| m.content(&format!("Pong! Latency: {}", latency.unwrap())))
@@ -339,31 +339,21 @@ fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),Comma
 
 	reply.edit(|m|
 		{
-			let c = &choosen.image;
-			let url = 
-			{
-				if file_is_video(&c)
-				{
-					format!("https://vid.pr0gramm.com/{}", &c)
-				} else {
-					format!("https://img.pr0gramm.com/{}", &c)
-				}
-			};
-
-			m.content(format!("{}: {}", msg.author.mention(), url))
+			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
+			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
 		}
-/*		.embed(|e| 
+/*		.embed(|e|
 		{
 			let e = e.colour(0xee4d2e);
 			let c = &choosen.image;
 			if c.ends_with(".webm") || c.ends_with(".mp4")
-			{ 
+			{
 				e.title(&choosen.image)
 					.url(&format!("https://vid.pr0gramm.com/{}", c))
-					.thumbnail(&format!("https://thumb.pr0gramm.com/{}", &choosen.thumb)) 
+					.thumbnail(&format!("https://thumb.pr0gramm.com/{}", &choosen.thumb))
 			}
 			else { e.image(&format!("https://img.pr0gramm.com/{}", &c)) }
-			
+
 		})
 */	).map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
 }
