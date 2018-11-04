@@ -1,4 +1,3 @@
-
 #[macro_use]
 extern crate log;
 extern crate fern;
@@ -125,10 +124,12 @@ fn main()
 			info!("CMD {}: {}", msg.author.tag(), msg.content);
 			true
 		})
-		.after(|_ctx, _msg, cmd_name, error| {
+		.after(|_ctx, msg, cmd_name, error| {
 			//  Print out an error if it happened
 			if let Err(why) = error {
 				error!("failed: {}: {:?}", cmd_name, why);
+				msg.channel_id.say(format!("{}: failed: {}", msg.author.mention(), why.0))
+				.expect("reply failed");
 			}
 		})
 /*		.on_dispatch_error(|_, msg, error| {
@@ -148,6 +149,8 @@ fn main()
 		})
 */
 		.command("ping", |c| c.exec(ping))
+		.command("isup", |c| c.exec(isup))
+
 		.command("pr0", |c| c.exec(pr0))
 		.command("kadse", |c| c.exec(kadse))
 		.command("otten", |c| c.exec(otten))
@@ -191,9 +194,11 @@ impl EventHandler for Handler
 */
 
 // helper
-fn fail<T: std::fmt::Display>(err: T) -> Result<(),CommandError>
+fn fail<T>(err: T) -> Result<(),CommandError>
+	where T: std::fmt::Display + std::fmt::Debug
 {
-	return Err(CommandError::from(err));
+	warn!("command fail: {:?}", err);
+	Err(CommandError::from(err))
 }
 
 fn ping(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
@@ -356,4 +361,51 @@ fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),Comma
 
 		})
 */	).map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
+}
+
+
+fn isup(_ctx: &mut Context, msg: &Message, args: Args) -> Result<(),CommandError>
+{
+	if args.is_empty() { return Err(CommandError("missing URL".to_string())); }
+
+	let domain = &args as &str;
+	let mut reply = msg.channel_id.say(format!("checking {}", domain))?;
+
+	let mut domain_ = String::new();
+	let url =
+	{
+		if domain.starts_with("http") {
+			domain
+		} else {
+			domain_ += "http://";
+			domain_ += domain;
+			&domain_
+		}
+
+	};
+
+	let res = 
+	{
+		let cl = reqwest::Client::builder()
+			.timeout(core::time::Duration::from_secs(10))
+			.build()
+			.map_err(|err| CommandError(format!("internal err: {}", err)))?;
+	
+		let r = cl.head(url).send()
+			.map_err(|e| format!("is not responding: {}", e))
+			.and_then(|res|
+				res.error_for_status()
+					.map(|_| format!("is online"))
+					.map_err(|err| err.status()
+						.map(|s| format!("is online, but... {}", s))
+						.unwrap_or(String::new())));
+		match r {
+			Err(s) => s,
+			Ok(s) => s,
+		}
+	};
+	
+	reply.edit(|m| 
+			m.content(format!("{}: {} {}", msg.author.mention(), domain, res)))
+		.map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
 }
