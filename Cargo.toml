@@ -2,6 +2,8 @@
 name = "ciri"
 version = "0.1.1"
 authors = ["xentec <xentec@aix0.eu>"]
+license = "GPL-2.0"
+edition = "2018"
 
 [dependencies]
 #clap = "2"
