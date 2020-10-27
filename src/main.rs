@@ -384,13 +384,13 @@ fn isup(_ctx: &mut Context, msg: &Message, args: Args) -> Result<(),CommandError
 
 	};
 
-	let res = 
+	let res =
 	{
 		let cl = reqwest::Client::builder()
 			.timeout(core::time::Duration::from_secs(10))
 			.build()
 			.map_err(|err| CommandError(format!("internal err: {}", err)))?;
-	
+
 		let r = cl.head(url).send()
 			.map_err(|e| format!("is not responding: {}", e))
 			.and_then(|res|
@@ -404,8 +404,8 @@ fn isup(_ctx: &mut Context, msg: &Message, args: Args) -> Result<(),CommandError
 			Ok(s) => s,
 		}
 	};
-	
-	reply.edit(|m| 
+
+	reply.edit(|m|
 			m.content(format!("{}: {} {}", msg.author.mention(), domain, res)))
 		.map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
 }
