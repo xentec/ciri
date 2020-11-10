@@ -1,28 +1,27 @@
 [package]
 name = "ciri"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["xentec <xentec@aix0.eu>"]
 license = "GPL-2.0"
 edition = "2018"
 
 [dependencies]
-#clap = "2"
+serenity = "^0.9"
+reqwest = { version = "^0.10", features = ["blocking", "gzip", "json"] }
+tokio = { version = "^0.2", features = ["fs"] }
 
-serenity = "0.8"
-typemap = "0.3"
-reqwest = "0.10"
-
-serde = "1"
-serde_derive = "1"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-chrono = "0.4"
-rand = "0.5"
-log = "0.4"
-fern = { version = "0.5", features = ["colored"] }
+anyhow = "^1.0"
+chrono = "^0.4"
+indexmap = { version = "1", features = ["serde-1"] }
 
-[patch.crates-io]
-# serenity = { path = '../serenity.rs' }
+tracing = { version = "^0.1", features = ["max_level_trace", "release_max_level_debug"] }
+tracing-log = { version = "^0.1" }
+tracing-subscriber = "^0.2"
+tracing-futures = "^0.2" # needed so intrument works with async functions.
 
 [profile.release]
+debug = 1
 lto = true

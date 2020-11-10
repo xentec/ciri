@@ -1,168 +1,104 @@
-#[macro_use]
-extern crate log;
-extern crate fern;
-extern crate chrono;
+use std::
+{
+	borrow::Cow,
+	sync::Arc,
+	time::Duration,
+};
 
-extern crate serenity;
-extern crate typemap;
+use serenity::
+{
+	prelude::*,
+	model::prelude::*,
+	async_trait,
+	client::bridge::gateway::{ShardId, ShardManager},
+	framework::{
+		StandardFramework,
+		standard::{
+			Args, CommandError, CommandResult,
+			macros::{command, group, hook},
+		},
+	},
+};
+use tokio::{*, io::AsyncWriteExt};
+use reqwest as http;
+use anyhow::{anyhow, Context as _};
 
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
+use tracing as log;
+use tracing_subscriber;
 
-extern crate reqwest;
-extern crate rand;
-//extern crate gifski;
+use serde::{Serialize, Deserialize};
+use serde_json;
+use indexmap;
 
-use serenity::prelude::*;
-use serenity::model::prelude::*;
-
-use serenity::client::bridge::gateway::{ShardId, ShardManager};
-use serenity::framework::standard::*;
-
-use fern::colors::{Color, ColoredLevelConfig};
-
-use std::sync::Arc;
-use std::{env, fs};
-
-mod cache;
-
-const CACHE_PATH: &'static str = "ciri.json";
+const CACHE_PATH: &str = "cache.json";
 const CACHE_SIZE: usize = 128;
 
 
-struct Handler;
-
-struct ShardManagerContainer;
-impl typemap::Key for ShardManagerContainer {
-	type Value = Arc<Mutex<ShardManager>>;
-}
-
-struct Pr0List
+fn main() -> anyhow::Result<()>
 {
-	pub blacklist: cache::Queue<u64>
+	tracing_subscriber::fmt()
+		.with_max_level(log::Level::INFO)
+		.init();
+
+	let mut rt = runtime::Builder::new()
+		.basic_scheduler()
+		.enable_all()
+		.build()?;
+
+	rt.block_on(run())?;
+	rt.shutdown_timeout(time::Duration::from_secs(10));
+	Ok(())
 }
 
-struct Pr0ListKey;
-impl typemap::Key for Pr0ListKey {
-	type Value = Pr0List;
-}
-
-
-fn main()
+async fn run() -> anyhow::Result<()>
 {
-	let colors_line = ColoredLevelConfig::new()
-		.error(Color::Red)
-		.warn(Color::Yellow)
-		// we actually don't need to specify the color for debug and info, they are white by default
-		.info(Color::White)
-		.debug(Color::White)
-		// depending on the terminals color scheme, this is the same as the background color
-		.trace(Color::BrightBlack);
-
-	// configure colors for the name of the level.
-	// since almost all of them are the some as the color for the whole line, we just clone
-	// `colors_line` and overwrite our changes
-	let colors_level = colors_line.clone()
-		.info(Color::Green);
-
-	fern::Dispatch::new()
-		.format(move |out, message, record| {
-			out.finish(format_args!(
-				"{color_line}[{date}][{target}][{level}{color_line}] {message}\x1B[0m",
-				color_line = format_args!("\x1B[{}m", colors_line.get_color(&record.level()).to_fg_str()),
-				date = chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-				target = record.target(),
-				level = colors_level.color(record.level()),
-				message = message,
-			));
-		})
-		// set the default log level. to filter out verbose log messages from dependencies, set
-		// this to Warn and overwrite the log level for your crate.
-		.level(log::LevelFilter::Info)
-		// change log levels for individual modules. Note: This looks for the record's target
-		// field which defaults to the module path but can be overwritten with the `target`
-		// parameter:
-		// `info!(target="special_target", "This log message is about special_target");`
-		.level_for("ciri", log::LevelFilter::Trace)
-		// output to stdout
-		.chain(std::io::stdout())
-		.apply().unwrap();
-
-
-	let mut blacklist = fs::OpenOptions::new().read(true)
-		.open(&CACHE_PATH).map_err(|_| ())
-		.and_then(|f| serde_json::from_reader(f).map_err(|_| ()))
-		.unwrap_or(cache::Queue::new());
-
-	blacklist.reserve(CACHE_SIZE);
-	if blacklist.len() > 0
-	{
-		blacklist.optimize();
-
-		info!("Loaded {} used entries", blacklist.len());
-//		debug!("{}", blacklist);
-	}
-
-	info!("Connecting...");
-
 	// https://discordapp.com/api/oauth2/authorize?client_id=340869720775327744&permissions=67619904&scope=bot
-	let mut client = Client::new(&env::var("DC_TOKEN").expect("TOKEN missing"), Handler).unwrap();
-	{
-		let mut data = client.data.lock();
-		data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-		data.insert::<Pr0ListKey>(Pr0List { blacklist });
-	}
+	let token = std::env::var("CIRI_TOKEN").context("failed to read bot token. Is $CIRI_TOKEN set?")?;
 
-	let fw = StandardFramework::new()
-		.configure(|c| c
-			.on_mention(true)
-			.prefix(".")
+	let mut client = Client::builder(&token)
+		.event_handler(Handler)
+		.framework(StandardFramework::new()
+			.configure(|c| c.prefix("."))
+			.before(before_hook)
+			.after(after_hook)
+			.group(&NETWORK_GROUP)
+			.group(&PR0GRAMM_GROUP)
 		)
-		.before(|_ctx, msg, _cmd|{
-			info!("CMD {}: {}", msg.author.tag(), msg.content);
-			true
-		})
-		.after(|_ctx, msg, cmd_name, error| {
-			//  Print out an error if it happened
-			if let Err(why) = error {
-				error!("failed: {}: {:?}", cmd_name, why);
-				msg.channel_id.say(format!("{}: failed: {}", msg.author.mention(), why.0))
-				.expect("reply failed");
-			}
-		})
-/*		.on_dispatch_error(|_, msg, error| {
-				match error {
-					NotEnoughArguments { min, given } => {
-						let s = format!("Need {} arguments, but only got {}.", min, given);
+		.await.unwrap();
 
-						let _ = msg.channel_id.say(&s);
-					},
-					TooManyArguments { max, given } => {
-						let s = format!("Max arguments allowed is {}, but got {}.", max, given);
-
-						let _ = msg.channel_id.say(&s);
-					},
-					_ => println!("Unhandled dispatch error."),
-				}
-		})
-*/
-		.command("ping", |c| c.exec(ping))
-		.command("isup", |c| c.exec(isup))
-
-		.command("pr0", |c| c.exec(pr0))
-		.command("kadse", |c| c.exec(kadse))
-		.command("otten", |c| c.exec(otten))
-		.command("waschkadse", |c| c.exec(waschkadse))
-		.command("ente", |c| c.exec(ente));
-
-
-	client.with_framework(fw);
-
-	if let Err(why) = client.start() {
-		error!("Client error: {:?}", why);
+	let cache = Cache::load_from_file(CACHE_PATH).await
+		.unwrap_or_else(|err| {
+			log::warn!("failed to load cache: {}", err);
+			Default::default()
+		});
+	let cache_entries: u64 = cache.pr0_posts.iter().flat_map(|map| map.1).sum();
+	if cache_entries > 0 {
+		log::info!("loaded {} cache entries", cache_entries);
 	}
+	let save_notifier = cache.save_notifier.clone();
+
+	let client_data = client.data.clone();
+	{
+		let mut state = client_data.write().await;
+		state.insert::<ShardManagerContainer>(client.shard_manager.clone());
+		state.insert::<Cache>(cache);
+	}
+
+	spawn(async move {
+		loop {
+			save_notifier.notified().await;
+			let state = client_data.read().await;
+			let cache = state.get::<Cache>().unwrap();
+			log::debug!(size = cache.entries_count(), "saving cache");
+			if let Err(err) = cache.save().await {
+				log::error!("failed to save cache: {}", err);
+			}
+		}
+	});
+
+	log::info!("Connecting...");
+	client.start().await
+		.context("failed to start serenity client")
 }
 
 /*  _______    _________   _____________
@@ -171,20 +107,21 @@ fn main()
  / /___  | |/ / /___/ /|  / / /  ___/ /
 /_____/  |___/_____/_/ |_/ /_/  /____/
 */
+struct Handler;
+
+#[async_trait]
 impl EventHandler for Handler
 {
-	fn ready(&self, _ctx: Context, rdy: Ready)
+	async fn ready(&self, _ctx: Context, rdy: Ready)
 	{
-		info!("Connected! {} guilds to serve", rdy.guilds.len());
+		log::info!("Connected! Serving {} guilds", rdy.guilds.len());
 	}
 
-	fn guild_create(&self, _ctx: Context, gld: Guild, _: bool)
+	async fn guild_create(&self, _ctx: Context, gld: Guild, _is_new: bool)
 	{
-		info!("Joined {:?}", gld.name);
-		gld.edit_nickname(Some("ISIS")).ok();
+		log::info!("Joined {:?}", gld.name);
 	}
 }
-
 
 /* __________  __  _____  ______    _   ______  _____
   / ____/ __ \/  |/  /  |/  /   |  / | / / __ \/ ___/
@@ -192,102 +129,168 @@ impl EventHandler for Handler
 / /___/ /_/ / /  / / /  / / ___ |/ /|  / /_/ /___/ /
 \____/\____/_/  /_/_/  /_/_/  |_/_/ |_/_____//____/
 */
-
-// helper
-fn fail<T>(err: T) -> Result<(),CommandError>
-	where T: std::fmt::Display + std::fmt::Debug
+#[hook]
+async fn after_hook(ctx: &Context, msg: &Message, cmd: &str, res: CommandResult)
 {
-	warn!("command fail: {:?}", err);
-	Err(CommandError::from(err))
+	//  Print out an error if it happened
+	if let Err(why) = res {
+		log::error!("failed: {}: {:?}", cmd, why);
+		msg.channel_id.say(&ctx.http, format!("{}: failed: {}", msg.author.mention(), why))
+			.await
+			.expect("failed to send error reply");
+	}
 }
 
-fn ping(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
+#[hook]
+async fn before_hook(_ctx: &Context, msg: &Message, _cmd: &str) -> bool {
+	log::info!("CMD {}: {}", msg.author.tag(), msg.content);
+	true
+}
+
+#[group]
+#[commands(ping, isup)]
+struct Network;
+
+#[command]
+async fn ping(ctx: &Context, msg: &Message) -> CommandResult
 {
-	fn int2float_concat(integer: u64, decimal: u64) -> f64
-	{
-		let mut exp = 10u64;
-		while decimal >= exp { exp *= 10; }
-		integer as f64 + decimal as f64 / exp as f64
-	}
+	let mut reply = msg.reply(ctx, "Pong!").await?;
 
-	let chan = msg.channel_id;
-	let mut reply = match chan.say("Pong!") {
-		Err(e) => return fail(format!("failed to reply: {}", e)),
-		Ok(v) => v
-	};
-
-	let latency =
+	let data = ctx.data.read().await;
+	let shard_manager = data.get::<ShardManagerContainer>().ok_or(anyhow!("failed to get shard manager"))?;
+	let manager = shard_manager.lock().await;
+	let runners = manager.runners.lock().await;
+	match runners.get(&ShardId(ctx.shard_id)).and_then(|runner| runner.latency)
 	{
-		let data = ctx.data.lock();
-		let shard_manager = match data.get::<ShardManagerContainer>() {
-			Some(v) => v,
-			None => {
-				error!("lat sh");
-				return fail(&"failed to get shard manager");
+		None => log::warn!("no shards found!"),
+		Some(latency) => {
+			fn dur_fmt(dur: &Duration) -> f64
+			{
+				let integer = dur.as_secs();
+				let decimal = dur.subsec_nanos() as u64;
+				let mut exp = 10u64;
+				while decimal >= exp { exp *= 10; }
+				(integer as f64 + decimal as f64 / exp as f64) * 1000f64
 			}
-		};
+			let _ = reply.edit(ctx, |m| m.content(&format!("Pong! Latency: {:.3} ms", dur_fmt(&latency)))).await;
+		},
+	}
+	Ok(())
+}
 
-		let manager = shard_manager.lock();
-		let runners = manager.runners.lock();
+struct ShardManagerContainer;
+impl TypeMapKey for ShardManagerContainer {
+	type Value = Arc<Mutex<ShardManager>>;
+}
 
-		runners.get(&ShardId(ctx.shard_id))
-			.and_then(|runner| runner.latency)
-			.map(|s| format!("{:.3} ms", int2float_concat(s.as_secs(), s.subsec_nanos() as u64) * 1000f64))
+#[command]
+async fn isup(ctx: &Context, msg: &Message, args: Args) -> CommandResult
+{
+	if !args.is_empty() {
+		return Err(anyhow!("Missing URL").into());
+	}
+
+	let domain = args.rest();
+	let mut reply = msg.channel_id.say(ctx, format!("checking {}", domain))
+		.await
+		.context("failed to reply")?;
+
+	let url: Cow<str> = if domain.starts_with("http") {
+		domain.into()
+	} else {
+		format!("http://{}", domain).into()
 	};
 
-
-	if latency.is_none()
+	let res = match http::Client::builder()
+		.timeout(Duration::from_secs(10))
+		.build()
+		.context("internal client error")?
+		.head(url.as_ref())
+		.send()
+		.await
+		.context("is not reponding")?
+		.error_for_status()
+			.map(|_| format!("is online"))
+			.map_err(|err| err.status()
+				.map(|s| format!("is online, but... {}", s))
+				.unwrap_or(String::new()))
 	{
-		error!("lat det");
-		return fail("Latency detection failed");
-	}
+		Err(s) => s,
+		Ok(s) => s,
+	};
 
-	if let Err(e) = reply.edit(|m| m.content(&format!("Pong! Latency: {}", latency.unwrap())))
-	{
-		error!("lat rep");
-		return fail(format!("Latency reply failed: {}", e));
-	}
+	reply.edit(ctx, |m| m.content(format!("{}: {} {}", msg.author.mention(), domain, res)))
+		.await
+		.context("failed to reply")?;
 
 	Ok(())
 }
 
-fn kadse(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
+
+/*  ____  ____  ____  __________  ___    __  _____  ___
+   / __ \/ __ \/ __ \/ ____/ __ \/   |  /  |/  /  |/  /
+  / /_/ / /_/ / / / / / __/ /_/ / /| | / /|_/ / /|_/ /
+ / ____/ _, _/ /_/ / /_/ / _, _/ ___ |/ /  / / /  / /
+/_/   /_/ |_|\____/\____/_/ |_/_/  |_/_/  /_/_/  /_/
+*/
+#[group]
+#[commands(pr0, kadse, wuffer, otten, ente, waschkadse)]
+struct Pr0gramm;
+
+#[command]
+pub async fn kadse(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["kadse", "süßvieh"])
+	pr0_fetch(ctx, msg, &vec!["kadse", "süßvieh"]).await
 }
 
-fn waschkadse(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
+#[command]
+async fn wuffer(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["müllpanda", "awww"])
+	pr0_fetch(ctx, msg, &vec!["bellkadse", "süßvieh"]).await
 }
 
-fn otten(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
+#[command]
+async fn waschkadse(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["otten", "awww"])
+	pr0_fetch(ctx, msg, &vec!["müllpanda", "awww"]).await
 }
 
-fn ente(ctx: &mut Context, msg: &Message, _args: Args) -> Result<(),CommandError>
+#[command]
+async fn otten(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["ente", "gut", "alles", "gut"])
+	pr0_fetch(ctx, msg, &vec!["otten", "awww"]).await
 }
 
-fn pr0(ctx: &mut Context, msg: &Message, args: Args) -> Result<(),CommandError>
+#[command]
+async fn ente(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &(&args).split_whitespace().collect::<Vec<_>>())
+	pr0_fetch(ctx, msg, &vec!["ente", "gut", "alles", "gut"]).await
 }
 
-fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),CommandError>
+#[command]
+async fn pr0(ctx: &Context, msg: &Message, args: Args) -> CommandResult
+{
+	let tags = args.message()
+		.split_ascii_whitespace()
+		.collect::<Vec<_>>();
+
+	pr0_fetch(ctx, msg, &tags).await
+}
+
+async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 {
 	#[derive(Debug,Deserialize)]
 	struct Image {
 		id: u64,
+		promoted: u64,
 		image: String,
-		thumb: String,
-		created: u64,
+//		thumb: String,
+//		created: u64,
 		up: i64,
 		down: i64,
-
+		deleted: Option<u32>,
 	};
+
 	#[derive(Debug,Deserialize)]
 	struct Res {
 		items: Vec<Image>
@@ -297,115 +300,110 @@ fn pr0_fetch(ctx: &mut Context, msg: &Message, args: &[&str]) -> Result<(),Comma
 		f.ends_with(".webm") || f.ends_with(".mp4")
 	}
 
-	let mut reply = msg.channel_id.say(&format!("Searching for {}...", args[0]))?;
+	let tags = args.join(" ");
 
-	let res = reqwest::get(&format!("https://pr0gramm.com/api/items/get?flags=9&promoted=1&tags={}", args.join("+")))
-                     .map(|mut r| r.json::<Res>());
-	let mut images = match res {
-		Err(e) => return fail(format!("kadse fetch failed: {}", e)),
-		Ok(v) => match v {
-			Err(e) => return fail(format!("kadse parse failed: {}", e)),
-			Ok(v) => v.items
+	log::debug!("searching for '{}'", &tags);
+	let mut reply = msg.channel_id.say(&ctx, &format!("Searching for {}...", tags)).await?;
+	let gid = msg.guild_id.unwrap_or_default().0;
+
+	let client = http::Client::builder()
+		.timeout(Duration::from_secs(10))
+		.gzip(true)
+		.build()?;
+
+	let mut last_id: u64 = 0;
+	let mut images: Vec<Image>;
+	loop {
+		let mut req = client.get("https://pr0gramm.com/api/items/get")
+			.query(&[("promoted", "1")])
+			.query(&[("tags", &tags)]);
+
+		if last_id != 0 {
+			req = req.query(&[("older", last_id)]);
 		}
-	};
 
-	{
-		let data = ctx.data.lock();
-		if let Some(cat_list) = data.get::<Pr0ListKey>()
+		images = req.send().await?
+			.json::<Res>().await?
+			.items;
+
+		log::debug!("{} results", images.len());
+		if let Some(img) = images.last()
 		{
-			images.retain(|img| !( // <--
-				cat_list.blacklist.contains(&img.id)
-//				|| file_is_video(&img.image)
-			))
+			last_id = img.promoted;
+		} else {
+			break;
 		}
+
+		images.retain(|img| img.deleted.is_none());
+		{
+			let state = ctx.data.read().await;
+			if let Some(cache) = state.get::<Cache>()
+			{
+				images.retain(|img|
+					cache.pr0_posts.get(&gid)
+						.map(|set| !set.contains(&img.id)).unwrap_or(true));
+			}
+		}
+		if !images.is_empty() { break; }
+		log::debug!("{} retained", images.len());
 	}
+
 	images.sort_unstable_by(|a, b| (a.up - a.down).cmp(&(b.up - b.down)));
 
-	use rand::Rng;
+	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?; // &images.choose(&mut rand::thread_rng()).ok_or(fail("no image found"))?;
 
-	let choosen = &rand::thread_rng().choose(&images).ok_or(CommandError::from("no image found"))?;
-
-	info!("Posting {}", &choosen.image);
-	{
-		let mut data = ctx.data.lock();
-		if let Some(cat_list) = data.get_mut::<Pr0ListKey>()
-		{
-			cat_list.blacklist.push(choosen.id);
-			if let Ok(f) = fs::OpenOptions::new().write(true).create(true).open(&CACHE_PATH)
-			{
-				let res = serde_json::to_writer(f, &cat_list.blacklist);
-				if res.is_err()
-				{
-					warn!("failed to save cache: {}", res.unwrap_err());
-				}
-			}
-		}
-	}
-
-	reply.edit(|m|
-		{
+	log::info!("Posting {} - {}", &choosen.id, &choosen.image);
+	reply.edit(ctx, |m| {
 			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
 			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
-		}
-/*		.embed(|e|
-		{
-			let e = e.colour(0xee4d2e);
-			let c = &choosen.image;
-			if c.ends_with(".webm") || c.ends_with(".mp4")
-			{
-				e.title(&choosen.image)
-					.url(&format!("https://vid.pr0gramm.com/{}", c))
-					.thumbnail(&format!("https://thumb.pr0gramm.com/{}", &choosen.thumb))
-			}
-			else { e.image(&format!("https://img.pr0gramm.com/{}", &c)) }
-
 		})
-*/	).map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
+		.await?;
+
+	{
+		let mut state = ctx.data.write().await;
+		if let Some(cache) = state.get_mut::<Cache>()
+		{
+			log::debug!(choosen.id, "blacklisting entry");
+			let set = cache.pr0_posts.entry(gid).or_default();
+			set.insert(choosen.id);
+			if set.len() > CACHE_SIZE {
+				set.pop();
+			}
+			cache.save_notifier.notify();
+		}
+	}
+	Ok(())
 }
 
+#[derive(Default, Deserialize, Serialize)]
+struct Cache {
+	pr0_posts: std::collections::HashMap<u64, indexmap::IndexSet<u64>>,
+	#[serde(skip)]
+	save_notifier: Arc<sync::Notify>,
+}
+impl Cache {
+	async fn load_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<Self> {
+		std::fs::File::open(path).context("failed to open cache file")
+			.and_then(|f| serde_json::from_reader(f).context("failed to parse cache"))
+	}
 
-fn isup(_ctx: &mut Context, msg: &Message, args: Args) -> Result<(),CommandError>
-{
-	if args.is_empty() { return Err(CommandError("missing URL".to_string())); }
+	fn entries_count(&self) -> u64 {
+		self.pr0_posts.iter().flat_map(|map| map.1).sum()
+	}
 
-	let domain = &args as &str;
-	let mut reply = msg.channel_id.say(format!("checking {}", domain))?;
+	async fn save(&self) -> anyhow::Result<()> {
+		let json = serde_json::to_string(&self)
+			.context("failed to serialize cache")?;
 
-	let mut domain_ = String::new();
-	let url =
-	{
-		if domain.starts_with("http") {
-			domain
-		} else {
-			domain_ += "http://";
-			domain_ += domain;
-			&domain_
-		}
-
-	};
-
-	let res =
-	{
-		let cl = reqwest::Client::builder()
-			.timeout(core::time::Duration::from_secs(10))
-			.build()
-			.map_err(|err| CommandError(format!("internal err: {}", err)))?;
-
-		let r = cl.head(url).send()
-			.map_err(|e| format!("is not responding: {}", e))
-			.and_then(|res|
-				res.error_for_status()
-					.map(|_| format!("is online"))
-					.map_err(|err| err.status()
-						.map(|s| format!("is online, but... {}", s))
-						.unwrap_or(String::new())));
-		match r {
-			Err(s) => s,
-			Ok(s) => s,
-		}
-	};
-
-	reply.edit(|m|
-			m.content(format!("{}: {} {}", msg.author.mention(), domain, res)))
-		.map_err(|e| CommandError::from(&format!("failed to reply: {}", e)))
+		fs::OpenOptions::new().write(true).create(true)
+			.open(&CACHE_PATH)
+			.await
+			.context("failed to open cache file")?
+			.write_all(json.as_bytes())
+			.await
+			.context("failed to write cache")
+	}
+}
+impl TypeMapKey for Cache {
+	type Value = Self;
 }
