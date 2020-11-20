@@ -351,7 +351,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 
 	images.sort_unstable_by(|a, b| (a.up - a.down).cmp(&(b.up - b.down)));
 
-	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?; // &images.choose(&mut rand::thread_rng()).ok_or(fail("no image found"))?;
+	let choosen = images.last().ok_or(CommandError::from("no unused images found"))?;
 
 	log::info!("Posting {} - {} (u: {} d: {})", &choosen.id, &choosen.image, choosen.up, choosen.down);
 	reply.edit(ctx, |m| {
