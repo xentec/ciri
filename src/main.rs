@@ -38,6 +38,7 @@ fn main() -> anyhow::Result<()>
 {
 	tracing_subscriber::fmt()
 		.with_max_level(log::Level::INFO)
+		.compact()
 		.init();
 
 	let mut rt = runtime::Builder::new()
