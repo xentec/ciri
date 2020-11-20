@@ -353,7 +353,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 
 	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?; // &images.choose(&mut rand::thread_rng()).ok_or(fail("no image found"))?;
 
-	log::info!("Posting {} - {}", &choosen.id, &choosen.image);
+	log::info!("Posting {} - {} (u: {} d: {})", &choosen.id, &choosen.image, choosen.up, choosen.down);
 	reply.edit(ctx, |m| {
 			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
 			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
