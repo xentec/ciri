@@ -241,13 +241,13 @@ struct Pr0gramm;
 #[command]
 pub async fn kadse(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["kadse", "süßvieh"]).await
+	pr0_fetch(ctx, msg, &vec!["kadse", "süßvieh", "awww"]).await
 }
 
 #[command]
 async fn wuffer(ctx: &Context, msg: &Message, _args: Args) -> CommandResult
 {
-	pr0_fetch(ctx, msg, &vec!["bellkadse", "süßvieh"]).await
+	pr0_fetch(ctx, msg, &vec!["bellkadse", "süßvieh", "awww"]).await
 }
 
 #[command]
