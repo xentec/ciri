@@ -65,7 +65,7 @@ async fn run() -> anyhow::Result<()>
 			.group(&NETWORK_GROUP)
 			.group(&PR0GRAMM_GROUP)
 		)
-		.await.unwrap();
+		.await?;
 
 	let cache = Cache::load_from_file(CACHE_PATH).await
 		.unwrap_or_else(|err| {
