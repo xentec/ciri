@@ -187,7 +187,7 @@ impl TypeMapKey for ShardManagerContainer {
 #[command]
 async fn isup(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 {
-	if !args.is_empty() {
+	if args.is_empty() {
 		return Err(anyhow!("Missing URL").into());
 	}
 
