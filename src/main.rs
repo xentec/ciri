@@ -29,6 +29,7 @@ use tracing_subscriber;
 use serde::{Serialize, Deserialize};
 use serde_json;
 use indexmap;
+use rand::{rngs::OsRng, seq::SliceRandom};
 
 const CACHE_PATH: &str = "cache.json";
 const CACHE_SIZE: usize = 128;
@@ -348,9 +349,11 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 		log::debug!("{} retained", images.len());
 	}
 
-	images.sort_unstable_by(|a, b| (a.up - a.down).cmp(&(b.up - b.down)));
+	images.sort_unstable_by(|a, b| (a.down - a.up).cmp(&(b.down - b.up)));
+	images.drain(0..20.min(images.len()));
+	images.shuffle(&mut OsRng);
 
-	let choosen = images.last().ok_or(CommandError::from("no unused images found"))?;
+	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?;
 
 	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, (choosen.up - choosen.down) as i32);
 	reply.edit(ctx, |m| {
