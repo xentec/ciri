@@ -41,8 +41,7 @@ fn main() -> anyhow::Result<()>
 		.compact()
 		.init();
 
-	let mut rt = runtime::Builder::new()
-		.basic_scheduler()
+	let rt = runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()?;
 
@@ -287,8 +286,8 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 		image: String,
 //		thumb: String,
 //		created: u64,
-		up: i64,
-		down: i64,
+		up: u32,
+		down: u32,
 		deleted: Option<u32>,
 	};
 
@@ -353,7 +352,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 
 	let choosen = images.last().ok_or(CommandError::from("no unused images found"))?;
 
-	log::info!("Posting {} - {} (u: {} d: {})", &choosen.id, &choosen.image, choosen.up, choosen.down);
+	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, (choosen.up - choosen.down) as i32);
 	reply.edit(ctx, |m| {
 			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
 			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
@@ -370,7 +369,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 			if set.len() > CACHE_SIZE {
 				set.pop();
 			}
-			cache.save_notifier.notify();
+			cache.save_notifier.notify_waiters();
 		}
 	}
 	Ok(())

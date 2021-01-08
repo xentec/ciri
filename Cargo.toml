@@ -6,9 +6,9 @@ license = "GPL-2.0"
 edition = "2018"
 
 [dependencies]
-serenity = "^0.9"
-reqwest = { version = "^0.10", features = ["blocking", "gzip", "json"] }
-tokio = { version = "^0.2", features = ["fs"] }
+serenity = "^0.10"
+reqwest = { version = "^0.11", features = ["gzip", "json"] }
+tokio = { version = "^1", features = ["fs"] }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -17,8 +17,7 @@ anyhow = "^1.0"
 chrono = "^0.4"
 indexmap = { version = "1", features = ["serde-1"] }
 
-tracing = { version = "^0.1", features = ["max_level_trace", "release_max_level_debug"] }
-tracing-log = { version = "^0.1" }
+tracing = { version = "^0.1", features = ["log", "max_level_trace", "release_max_level_debug"] }
 tracing-subscriber = "^0.2"
 tracing-futures = "^0.2" # needed so intrument works with async functions.
 
