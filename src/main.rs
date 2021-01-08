@@ -287,8 +287,8 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 		image: String,
 //		thumb: String,
 //		created: u64,
-		up: u32,
-		down: u32,
+		up: i32,
+		down: i32,
 		deleted: Option<u32>,
 	};
 
@@ -355,7 +355,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 
 	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?;
 
-	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, (choosen.up - choosen.down) as i32);
+	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, choosen.up - choosen.down);
 	reply.edit(ctx, |m| {
 			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
 			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
