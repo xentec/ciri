@@ -1,6 +1,6 @@
 [package]
 name = "ciri"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["xentec <xentec@aix0.eu>"]
 license = "GPL-2.0"
 edition = "2018"
