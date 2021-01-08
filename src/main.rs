@@ -136,7 +136,7 @@ async fn after_hook(ctx: &Context, msg: &Message, cmd: &str, res: CommandResult)
 	//  Print out an error if it happened
 	if let Err(why) = res {
 		log::error!("failed: {}: {:?}", cmd, why);
-		msg.channel_id.say(&ctx.http, format!("{}: failed: {}", msg.author.mention(), why))
+		msg.reply(&ctx, format!("command failed: {}", why))
 			.await
 			.expect("failed to send error reply");
 	}
@@ -192,7 +192,7 @@ async fn isup(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 	}
 
 	let domain = args.rest();
-	let mut reply = msg.channel_id.say(ctx, format!("checking {}", domain))
+	let mut reply = msg.reply(ctx, format!("checking {}", domain))
 		.await
 		.context("failed to reply")?;
 
@@ -220,7 +220,7 @@ async fn isup(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 		Ok(s) => s,
 	};
 
-	reply.edit(ctx, |m| m.content(format!("{}: {} {}", msg.author.mention(), domain, res)))
+	reply.edit(ctx, |m| m.content(format!("{} {}", domain, res)))
 		.await
 		.context("failed to reply")?;
 
@@ -304,7 +304,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 	let tags = args.join(" ");
 
 	log::debug!("searching for '{}'", &tags);
-	let mut reply = msg.channel_id.say(&ctx, &format!("Searching for {}...", tags)).await?;
+	let mut reply = msg.reply(&ctx, &format!("Searching for {}...", tags)).await?;
 	let gid = msg.guild_id.unwrap_or_default().0;
 
 	let client = http::Client::builder()
@@ -358,7 +358,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, choosen.up - choosen.down);
 	reply.edit(ctx, |m| {
 			let sub = if file_is_video(&choosen.image) { "vid" } else { "img" };
-			m.content(format!("{}: https://{}.pr0gramm.com/{}", msg.author.mention(), sub, choosen.image))
+			m.content(format!("https://{}.pr0gramm.com/{}", sub, choosen.image))
 		})
 		.await?;
 
