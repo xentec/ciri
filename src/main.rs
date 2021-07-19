@@ -290,7 +290,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 		up: i32,
 		down: i32,
 		deleted: Option<u32>,
-	};
+	}
 
 	#[derive(Debug,Deserialize)]
 	struct Res {
@@ -350,10 +350,12 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 	}
 
 	images.sort_unstable_by(|a, b| (a.down - a.up).cmp(&(b.down - b.up)));
-	images.drain(0..20.min(images.len()));
+	if images.len() > 20 {
+		images.drain(20..);
+	}
 	images.shuffle(&mut OsRng);
 
-	let choosen = images.first().ok_or(CommandError::from("no unused images found"))?;
+	let choosen = images.first().ok_or(CommandError::from("no (unused) images found"))?;
 
 	log::info!("Posting {} - {} (+{}-{}={})", &choosen.id, &choosen.image, choosen.up, choosen.down, choosen.up - choosen.down);
 	reply.edit(ctx, |m| {
