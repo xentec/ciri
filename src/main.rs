@@ -75,7 +75,7 @@ async fn run() -> anyhow::Result<()>
 			log::warn!("failed to load cache: {}", err);
 			Default::default()
 		});
-	let cache_entries: u64 = cache.pr0_posts.iter().flat_map(|map| map.1).sum();
+	let cache_entries: usize = cache.pr0_posts.iter().map(|map| map.1.len()).sum();
 	if cache_entries > 0 {
 		log::info!("loaded {} cache entries", cache_entries);
 	}
@@ -345,9 +345,10 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 			let state = ctx.data.read().await;
 			if let Some(cache) = state.get::<Cache>()
 			{
-				images.retain(|img|
-					cache.pr0_posts.get(&gid)
-						.map(|set| !set.contains(&img.id)).unwrap_or(true));
+				if let Some(set) = cache.pr0_posts.get(&gid)
+				{
+					images.retain(|img| !set.contains(&img.id));
+				}
 			}
 		}
 		if !images.is_empty() { break; }
@@ -377,7 +378,8 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 			let set = cache.pr0_posts.entry(gid).or_default();
 			set.insert(choosen.id);
 			if set.len() > CACHE_SIZE {
-				set.pop();
+				let v = *set.first().unwrap();
+				set.shift_remove(&v);
 			}
 			cache.save_notifier.notify_waiters();
 		}
