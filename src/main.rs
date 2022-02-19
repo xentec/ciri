@@ -313,6 +313,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 	let client = http::Client::builder()
 		.timeout(Duration::from_secs(10))
 		.gzip(true)
+		.user_agent("ciri/1.0.0")
 		.build()?;
 
 	let mut last_id: u64 = 0;
@@ -327,6 +328,7 @@ async fn pr0_fetch(ctx: &Context, msg: &Message, args: &[&str]) -> CommandResult
 		}
 
 		images = req.send().await?
+			.error_for_status()?
 			.json::<Res>().await?
 			.items;
 
