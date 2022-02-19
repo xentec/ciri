@@ -55,8 +55,11 @@ async fn run() -> anyhow::Result<()>
 {
 	// https://discordapp.com/api/oauth2/authorize?client_id=340869720775327744&permissions=67619904&scope=bot
 	let token = std::env::var("CIRI_TOKEN").context("failed to read bot token. Is $CIRI_TOKEN set?")?;
+	let app_id: u64 = std::env::var("CIRI_APPID").context("failed to read bot app ID. Is $CIRI_APPID set?")?
+		.parse().context("$CIRI_APPID is not a valid application ID!")?;
 
 	let mut client = Client::builder(&token)
+		.application_id(app_id)
 		.event_handler(Handler)
 		.framework(StandardFramework::new()
 			.configure(|c| c.prefix("."))
